@@ -1,12 +1,14 @@
-# Frontend (GitHub Pages)
+# API (Cloudflare Worker)
 
 배포 대상:
-- GitHub Pages
-- reservation.hansalimnc.co.kr
+- Cloudflare Worker
+- workers.dev 주소 사용
 
-필수 파일:
-- index.html
-- fail.html
-- success.html
-- assets/
-- CNAME
+엔드포인트:
+- POST /api/quote
+- POST /api/create-payment
+- POST /api/verify-payment
+- POST /api/booking-complete
+
+필수 환경변수:
+- APPS_SCRIPT_URL
