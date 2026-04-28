@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>한살림 농업살림센터 예약</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
+  <link rel="stylesheet" href="/assets/styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="/index.html">
+        <div class="brand-mark"></div>
+        <div class="brand-text">
+          <strong>한살림 농업살림센터 예약</strong>
+          <span>reservation.hansalimnc.co.kr</span>
+        </div>
+      </a>
+      <nav class="nav-links">
+        <a href="/index.html" class="active">예약</a>
+        <a href="/success.html">완료 예시</a>
+        <a href="/fail.html">실패 예시</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container page">
+    <section class="hero-card">
+      <div>
+        <span class="badge">예약 전용 프론트</span>
+        <h1>연수원 · 회의실 예약</h1>
+        <p>
+          프론트는 GitHub Pages, API는 Cloudflare Worker, 내부 자동화는 Google Apps Script로 분리한 추천 구조입니다.
+          결제 검증은 Worker에서 처리하고, 최종 예약 저장·캘린더 등록·메일 발송은 Apps Script가 담당합니다.
+        </p>
+      </div>
+      <div class="hero-note">
+        <div class="pricing-box">
+          <h3>연수원 이용요금</h3>
+          <ul>
+            <li>1~8인: 150,000원</li>
+            <li>9인부터 1인당 20,000원 추가</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="grid-two">
+      <section class="card">
+        <h2>예약 정보 입력</h2>
+        <form id="reservation-form" class="form-grid">
+          <label>
+            <span>예약 유형</span>
+            <select id="bookingType" name="bookingType">
+              <option value="dorm">연수원</option>
+              <option value="meeting">회의실</option>
+            </select>
+          </label>
+
+          <label>
+            <span>공간</span>
+            <select id="resourceName" name="resourceName">
+              <option value="연수원">연수원</option>
+              <option value="2층 대회의실[모심]">2층 대회의실[모심]</option>
+              <option value="2층 중회의실[살림]">2층 중회의실[살림]</option>
+              <option value="3층 중회의실[생명]">3층 중회의실[생명]</option>
+            </select>
+          </label>
+
+          <label>
+            <span>입실/이용 시작일</span>
+            <input type="date" id="startDate" name="startDate" required />
+          </label>
+
+          <label>
+            <span>퇴실/종료일</span>
+            <input type="date" id="endDate" name="endDate" required />
+          </label>
+
+          <label>
+            <span>인원 수</span>
+            <input type="number" id="headcount" name="headcount" min="1" value="8" required />
+          </label>
+
+          <label>
+            <span>담당자명</span>
+            <input type="text" id="contactName" name="contactName" required />
+          </label>
+
+          <label>
+            <span>연락처</span>
+            <input type="tel" id="phone" name="phone" placeholder="010-0000-0000" required />
+          </label>
+
+          <label>
+            <span>이메일</span>
+            <input type="email" id="email" name="email" required />
+          </label>
+
+          <label class="full">
+            <span>이용 목적</span>
+            <input type="text" id="purpose" name="purpose" placeholder="예: 교육 워크숍" required />
+          </label>
+
+          <label class="full checkline">
+            <input type="checkbox" id="agree" required />
+            <span>이용약관 및 취소/환불정책을 확인했습니다.</span>
+          </label>
+
+          <div class="full summary-box">
+            <div>
+              <strong>예상 결제금액</strong>
+              <div id="quotedAmount">150,000원</div>
+            </div>
+            <button type="button" id="btnQuote" class="btn btn-secondary">금액 다시 계산</button>
+          </div>
+
+          <div class="full button-row">
+            <button type="button" id="btnPrepare" class="btn btn-secondary">예약 검증</button>
+            <button type="button" id="btnPay" class="btn btn-primary">결제하기</button>
+          </div>
+        </form>
+      </section>
+
+      <aside class="card">
+        <h2>구조 안내</h2>
+        <ol class="flow-list">
+          <li>GitHub Pages가 예약 화면 제공</li>
+          <li>Cloudflare Worker가 금액 계산·예약 검증·결제 검증 처리</li>
+          <li>Apps Script가 시트·캘린더·메일 자동화 담당</li>
+        </ol>
+
+        <div class="notice">
+          <h3>현재 상태</h3>
+          <p>
+            이 패키지는 실결제 시크릿 키를 포함하지 않은 개발용 통합본입니다.
+            PortOne 실연동 시에는 Worker 환경변수와 Apps Script 웹앱 URL을 입력해야 합니다.
+          </p>
+        </div>
+
+        <div class="notice">
+          <h3>정책 링크</h3>
+          <p class="links">
+            <a href="https://www.hansalimnc.co.kr/pages/policy/terms.html" target="_blank" rel="noopener">이용약관</a>
+            <a href="https://www.hansalimnc.co.kr/pages/policy/refund.html" target="_blank" rel="noopener">취소/환불정책</a>
+            <a href="https://www.hansalimnc.co.kr/pages/policy/privacy.html" target="_blank" rel="noopener">개인정보처리방침</a>
+            <a href="https://www.hansalimnc.co.kr/pages/policy/business.html" target="_blank" rel="noopener">사업자정보</a>
+          </p>
+        </div>
+      </aside>
+    </section>
+
+    <section class="card">
+      <h2>개발 상태 로그</h2>
+      <pre id="log" class="log-box">준비됨</pre>
+    </section>
+  </main>
+
+  <script src="/assets/config.js"></script>
+  <script src="/assets/app.js"></script>
+</body>
+</html>
