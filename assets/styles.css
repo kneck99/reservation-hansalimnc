@@ -1,0 +1,122 @@
+:root{
+  --bg:#f5f1e8;
+  --surface:#fcfaf5;
+  --line:#ddd6c8;
+  --text:#163a33;
+  --muted:#5b675f;
+  --primary:#0f4a3c;
+  --primary-strong:#09382e;
+  --shadow:0 14px 32px rgba(0,40,27,.08);
+  --radius-lg:24px;
+  --max:1200px;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  font-family:'Pretendard',system-ui,sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  line-height:1.7;
+}
+a{text-decoration:none;color:inherit}
+.container{width:min(calc(100% - 32px),var(--max));margin:0 auto}
+.site-header{
+  position:sticky;top:0;z-index:100;
+  background:rgba(245,241,232,.94);
+  backdrop-filter:blur(10px);
+  border-bottom:1px solid rgba(22,58,51,.08);
+}
+.nav{
+  display:flex;align-items:center;justify-content:space-between;gap:24px;
+  padding:14px 0;
+}
+.brand{display:flex;align-items:center;gap:12px}
+.brand-mark{
+  width:40px;height:40px;border-radius:999px;
+  background:linear-gradient(135deg,#89b45a,#0f4a3c);
+}
+.brand-text{display:flex;flex-direction:column;line-height:1.2}
+.brand-text strong{font-size:18px}
+.brand-text span{font-size:12px;color:var(--muted)}
+.nav-links{display:flex;gap:16px;flex-wrap:wrap}
+.nav-links a{font-weight:700;color:var(--muted)}
+.nav-links a.active,.nav-links a:hover{color:var(--primary)}
+.page{padding:28px 0 64px}
+.hero-card,.card{
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-radius:var(--radius-lg);
+  box-shadow:var(--shadow);
+}
+.hero-card{
+  display:grid;grid-template-columns:1.2fr .8fr;gap:24px;
+  padding:32px;margin-bottom:24px;
+}
+.hero-card h1{margin:0 0 12px;font-size:clamp(2rem,4vw,3rem);line-height:1.08}
+.hero-card p{margin:0;color:var(--muted)}
+.pricing-box{
+  width:100%;
+  background:linear-gradient(180deg,#f8f4e8,#f1ebdd);
+  border-radius:20px;
+  padding:20px;
+}
+.badge{
+  display:inline-flex;align-items:center;justify-content:center;
+  padding:6px 12px;border-radius:999px;background:#e8e1cf;
+  color:#355a47;font-size:12px;font-weight:800;margin-bottom:12px;
+}
+.badge.ok{background:#dcefe0;color:#0f4a3c}
+.badge.fail{background:#f4dddd;color:#8d2323}
+.grid-two{display:grid;grid-template-columns:1.1fr .9fr;gap:24px}
+.card{padding:28px}
+.form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.form-grid label{display:grid;gap:8px}
+.form-grid label span{font-size:14px;font-weight:700}
+.form-grid input,.form-grid select{
+  min-height:48px;padding:0 14px;border-radius:14px;
+  border:1px solid rgba(22,58,51,.15);background:#fff;color:var(--text);
+}
+.form-grid .full{grid-column:1/-1}
+.checkline{display:flex;align-items:center;gap:10px}
+.checkline input{min-height:auto}
+.summary-box,.notice{
+  background:#fff;border:1px solid rgba(22,58,51,.08);
+  border-radius:16px;padding:16px;
+}
+.summary-box{display:flex;align-items:center;justify-content:space-between;gap:16px}
+#quotedAmount{font-size:28px;font-weight:800;line-height:1.1;margin-top:6px}
+.button-row{display:flex;gap:12px}
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;
+  min-height:50px;padding:0 22px;border-radius:999px;border:1px solid transparent;
+  font-weight:700;cursor:pointer;transition:.2s ease;
+}
+.btn:hover{transform:translateY(-1px)}
+.btn-primary{background:var(--primary);color:#fff}
+.btn-primary:hover{background:var(--primary-strong)}
+.btn-secondary{background:#fff;border-color:rgba(22,58,51,.12);color:var(--text)}
+.flow-list{margin:0;padding-left:22px;display:grid;gap:10px}
+.notice + .notice{margin-top:16px}
+.notice h3{margin:0 0 8px}
+.notice p{margin:0;color:var(--muted)}
+.links{display:flex;flex-wrap:wrap;gap:10px}
+.links a{font-weight:700;color:var(--primary)}
+.log-box{
+  margin:0;background:#13231f;color:#f3f6f5;
+  border-radius:16px;padding:16px;overflow:auto;white-space:pre-wrap;
+}
+.result-page{min-height:100dvh;display:grid;place-items:center}
+.centered{text-align:center;max-width:680px}
+.centered h1{margin:0 0 10px}
+.centered p{margin:0 0 18px;color:var(--muted)}
+@media (max-width: 900px){
+  .hero-card,.grid-two{grid-template-columns:1fr}
+}
+@media (max-width: 720px){
+  .container{width:min(calc(100% - 20px),var(--max))}
+  .nav{flex-direction:column;align-items:flex-start;gap:12px}
+  .form-grid{grid-template-columns:1fr}
+  .summary-box,.button-row{flex-direction:column;align-items:stretch}
+  .btn{width:100%}
+  #quotedAmount{font-size:24px}
+}
