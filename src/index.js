@@ -4,7 +4,7 @@ function corsHeaders() {
   return {
     "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
     "Access-Control-Max-Age": "86400"
   };
 }
@@ -58,6 +58,125 @@ async function getPortOnePayment(env, paymentId) {
   return data;
 }
 
+const textEncoder = new TextEncoder();
+
+function isoNow() {
+  return new Date().toISOString();
+}
+
+function addDays(days) {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d.toISOString();
+}
+
+function normalizeLoginId(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function clean(value) {
+  return String(value || '').trim();
+}
+
+function normalizePhone(value) {
+  const digits = String(value || '').replace(/\D/g, '').slice(0, 11);
+  if (digits.length < 4) return digits;
+  if (digits.length < 8) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+  return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+}
+
+async function sha256Hex(input) {
+  const hashBuffer = await crypto.subtle.digest('SHA-256', textEncoder.encode(input));
+  return [...new Uint8Array(hashBuffer)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function hashPassword(loginId, password, env) {
+  const normalizedId = normalizeLoginId(loginId);
+  const raw = `${env.SESSION_SECRET}::${normalizedId}::${String(password || '')}`;
+  return await sha256Hex(raw);
+}
+
+function makeSessionToken() {
+  return `${crypto.randomUUID()}-${crypto.randomUUID()}`;
+}
+
+function getBearerToken(request) {
+  const auth = request.headers.get('Authorization') || '';
+  const match = auth.match(/^Bearer\s+(.+)$/i);
+  return match ? match[1].trim() : '';
+}
+
+async function getSessionUser(env, token) {
+  if (!token) return null;
+
+  const row = await env.DB.prepare(`
+    SELECT
+      s.id AS session_id,
+      s.user_id,
+      s.expires_at,
+      u.login_id,
+      u.name,
+      u.phone,
+      u.affiliation,
+      u.role,
+      u.status
+    FROM sessions s
+    JOIN users u ON u.id = s.user_id
+    WHERE s.id = ?
+    LIMIT 1
+  `).bind(token).first();
+
+  if (!row) return null;
+
+  if (new Date(row.expires_at).getTime() < Date.now()) {
+    await env.DB.prepare(`DELETE FROM sessions WHERE id = ?`).bind(token).run();
+    return null;
+  }
+
+  return row;
+}
+
+async function requireAuth(request, env) {
+  const token = getBearerToken(request);
+  const user = await getSessionUser(env, token);
+
+  if (!user) {
+    throw new Error('로그인이 필요합니다.');
+  }
+
+  if (user.status !== 'approved') {
+    throw new Error('승인된 계정만 사용할 수 있습니다.');
+  }
+
+  return user;
+}
+
+async function requireAdmin(request, env) {
+  const user = await requireAuth(request, env);
+
+  if (user.role !== 'admin') {
+    throw new Error('관리자 권한이 필요합니다.');
+  }
+
+  return user;
+}
+
+async function createSession(env, userId) {
+  const token = makeSessionToken();
+  const now = isoNow();
+  const expiresAt = addDays(7);
+
+  await env.DB.prepare(`
+    INSERT INTO sessions (id, user_id, expires_at, created_at)
+    VALUES (?, ?, ?, ?)
+  `).bind(token, userId, expiresAt, now).run();
+
+  return {
+    token,
+    expiresAt
+  };
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -65,7 +184,261 @@ export default {
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: corsHeaders() });
     }
+   
+    // 회원가입
+    if (url.pathname === "/api/auth/signup" && request.method === "POST") {
+      try {
+        const body = await request.json();
 
+        const loginId = normalizeLoginId(body.loginId);
+        const password = String(body.password || '');
+        const name = clean(body.name);
+        const phone = normalizePhone(body.phone);
+        const affiliation = clean(body.affiliation);
+
+        if (!loginId) throw new Error("아이디를 입력해 주세요.");
+        if (!password || password.length < 4) throw new Error("비밀번호를 4자 이상 입력해 주세요.");
+        if (!name) throw new Error("이름을 입력해 주세요.");
+        if (!phone) throw new Error("전화번호를 입력해 주세요.");
+        if (!affiliation) throw new Error("소속을 입력해 주세요.");
+
+        const exists = await env.DB.prepare(`
+          SELECT id FROM users WHERE login_id = ? LIMIT 1
+        `).bind(loginId).first();
+
+        if (exists) {
+          throw new Error("이미 사용 중인 아이디입니다.");
+        }
+
+        const passwordHash = await hashPassword(loginId, password, env);
+        const now = isoNow();
+
+        await env.DB.prepare(`
+          INSERT INTO users (
+            login_id, password_hash, name, phone, affiliation, role, status, created_at
+          ) VALUES (?, ?, ?, ?, ?, 'user', 'pending', ?)
+        `).bind(loginId, passwordHash, name, phone, affiliation, now).run();
+
+        return json({
+          ok: true,
+          message: "회원가입 신청이 완료되었습니다. 관리자 승인 후 로그인할 수 있습니다."
+        });
+      } catch (error) {
+        return json({ ok: false, error: error.message || "회원가입 실패" }, 400);
+      }
+    }
+
+    // 로그인
+    if (url.pathname === "/api/auth/login" && request.method === "POST") {
+      try {
+        const body = await request.json();
+
+        const loginId = normalizeLoginId(body.loginId);
+        const password = String(body.password || '');
+
+        if (!loginId) throw new Error("아이디를 입력해 주세요.");
+        if (!password) throw new Error("비밀번호를 입력해 주세요.");
+
+        const user = await env.DB.prepare(`
+          SELECT * FROM users WHERE login_id = ? LIMIT 1
+        `).bind(loginId).first();
+
+        if (!user) {
+          throw new Error("아이디 또는 비밀번호가 올바르지 않습니다.");
+        }
+
+        const passwordHash = await hashPassword(loginId, password, env);
+        if (user.password_hash !== passwordHash) {
+          throw new Error("아이디 또는 비밀번호가 올바르지 않습니다.");
+        }
+
+        if (user.status !== 'approved') {
+          throw new Error("아직 승인되지 않은 계정입니다.");
+        }
+
+        const session = await createSession(env, user.id);
+
+        await env.DB.prepare(`
+          UPDATE users SET last_login_at = ? WHERE id = ?
+        `).bind(isoNow(), user.id).run();
+
+        return json({
+          ok: true,
+          token: session.token,
+          expiresAt: session.expiresAt,
+          user: {
+            id: user.id,
+            loginId: user.login_id,
+            name: user.name,
+            phone: user.phone,
+            affiliation: user.affiliation,
+            role: user.role,
+            status: user.status
+          }
+        });
+      } catch (error) {
+        return json({ ok: false, error: error.message || "로그인 실패" }, 400);
+      }
+    }
+
+    // 내 정보
+    if (url.pathname === "/api/auth/me" && request.method === "GET") {
+      try {
+        const user = await requireAuth(request, env);
+
+        return json({
+          ok: true,
+          user: {
+            id: user.user_id,
+            loginId: user.login_id,
+            name: user.name,
+            phone: user.phone,
+            affiliation: user.affiliation,
+            role: user.role,
+            status: user.status
+          }
+        });
+      } catch (error) {
+        return json({ ok: false, error: error.message || "인증 확인 실패" }, 401);
+      }
+    }
+
+    // 로그아웃
+    if (url.pathname === "/api/auth/logout" && request.method === "POST") {
+      try {
+        const token = getBearerToken(request);
+        if (token) {
+          await env.DB.prepare(`DELETE FROM sessions WHERE id = ?`).bind(token).run();
+        }
+
+        return json({
+          ok: true,
+          message: "로그아웃 되었습니다."
+        });
+      } catch (error) {
+        return json({ ok: false, error: error.message || "로그아웃 실패" }, 400);
+      }
+    }
+
+    // 최초 관리자 지정
+    if (url.pathname === "/api/admin/bootstrap" && request.method === "POST") {
+      try {
+        const body = await request.json();
+        const initAdminKey = String(body.initAdminKey || '');
+        const loginId = normalizeLoginId(body.loginId);
+
+        if (!env.INIT_ADMIN_KEY) {
+          throw new Error("INIT_ADMIN_KEY 환경변수가 없습니다.");
+        }
+
+        if (initAdminKey !== env.INIT_ADMIN_KEY) {
+          throw new Error("초기 관리자 키가 올바르지 않습니다.");
+        }
+
+        if (!loginId) {
+          throw new Error("관리자로 지정할 아이디를 입력해 주세요.");
+        }
+
+        const user = await env.DB.prepare(`
+          SELECT id FROM users WHERE login_id = ? LIMIT 1
+        `).bind(loginId).first();
+
+        if (!user) {
+          throw new Error("해당 아이디의 사용자가 없습니다.");
+        }
+
+        await env.DB.prepare(`
+          UPDATE users
+          SET status = 'approved', role = 'admin'
+          WHERE login_id = ?
+        `).bind(loginId).run();
+
+        return json({
+          ok: true,
+          message: "초기 관리자 지정이 완료되었습니다."
+        });
+      } catch (error) {
+        return json({ ok: false, error: error.message || "초기 관리자 지정 실패" }, 400);
+      }
+    }
+
+    // 승인 대기 사용자 목록
+    if (url.pathname === "/api/admin/users" && request.method === "GET") {
+      try {
+        await requireAdmin(request, env);
+
+        const status = clean(url.searchParams.get('status') || 'pending');
+
+        const result = await env.DB.prepare(`
+          SELECT id, login_id, name, phone, affiliation, role, status, created_at
+          FROM users
+          WHERE status = ?
+          ORDER BY id ASC
+        `).bind(status).all();
+
+        return json({
+          ok: true,
+          users: result.results || []
+        });
+      } catch (error) {
+        return json({ ok: false, error: error.message || "사용자 목록 조회 실패" }, 403);
+      }
+    }
+
+    // 사용자 승인
+    if (url.pathname === "/api/admin/users/approve" && request.method === "POST") {
+      try {
+        await requireAdmin(request, env);
+
+        const body = await request.json();
+        const userId = Number(body.userId);
+
+        if (!userId) {
+          throw new Error("userId가 필요합니다.");
+        }
+
+        await env.DB.prepare(`
+          UPDATE users
+          SET status = 'approved'
+          WHERE id = ?
+        `).bind(userId).run();
+
+        return json({
+          ok: true,
+          message: "사용자 승인이 완료되었습니다."
+        });
+      } catch (error) {
+        return json({ ok: false, error: error.message || "사용자 승인 실패" }, 400);
+      }
+    }
+
+    // 사용자 반려
+    if (url.pathname === "/api/admin/users/reject" && request.method === "POST") {
+      try {
+        await requireAdmin(request, env);
+
+        const body = await request.json();
+        const userId = Number(body.userId);
+
+        if (!userId) {
+          throw new Error("userId가 필요합니다.");
+        }
+
+        await env.DB.prepare(`
+          UPDATE users
+          SET status = 'rejected'
+          WHERE id = ?
+        `).bind(userId).run();
+
+        return json({
+          ok: true,
+          message: "사용자 반려가 완료되었습니다."
+        });
+      } catch (error) {
+        return json({ ok: false, error: error.message || "사용자 반려 실패" }, 400);
+      }
+    }
+    
     // 1) 연수원 예상 결제금액 자동 계산
     if (url.pathname === "/api/quote" && request.method === "POST") {
       try {
