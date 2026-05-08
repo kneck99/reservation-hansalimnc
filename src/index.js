@@ -19,19 +19,42 @@ function json(data, status = 200) {
   });
 }
 
-function calculateDormPrice(headcount) {
+function getDormNights(startDate, endDate) {
+  if (!startDate || !endDate) {
+    throw new Error("입실일과 퇴실일을 입력해 주세요.");
+  }
+
+  const start = new Date(`${startDate}T00:00:00+09:00`);
+  const end = new Date(`${endDate}T00:00:00+09:00`);
+
+  const diffMs = end.getTime() - start.getTime();
+  const nights = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+  if (!Number.isFinite(nights) || nights < 1) {
+    throw new Error("퇴실일은 입실일 다음 날짜로 입력해 주세요.");
+  }
+
+  return nights;
+}
+
+function calculateDormAmount({ headcount, startDate, endDate }) {
   const count = Number(headcount || 0);
+
   if (!count || count < 1) {
     throw new Error("인원 수를 1명 이상 입력해 주세요.");
   }
-  if (count <= 8) return 150000;
-  return 150000 + ((count - 8) * 20000);
-}
 
-function buildPaymentId(prefix = "HS") {
-  const stamp = Date.now();
-  const rand = Math.floor(Math.random() * 10000).toString().padStart(4, "0");
-  return `${prefix}-${stamp}-${rand}`;
+  const nights = getDormNights(startDate, endDate);
+  const baseAmount = 150000;
+  const extraPeople = Math.max(0, count - 8);
+  const nightlyAmount = baseAmount + (extraPeople * 20000);
+  const totalAmount = nightlyAmount * nights;
+
+  return {
+    nights,
+    nightlyAmount,
+    totalAmount
+  };
 }
 
 async function getPortOnePayment(env, paymentId) {
@@ -631,31 +654,4 @@ export default {
     return json({ ok: false, error: "Not found" }, 404);
   }
 };
-function getDormNights(startDate, endDate) {
-  const start = new Date(`${startDate}T00:00:00+09:00`);
-  const end = new Date(`${endDate}T00:00:00+09:00`);
-  const diffMs = end.getTime() - start.getTime();
-  const nights = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 
-  if (!Number.isFinite(nights) || nights < 1) {
-    return 1;
-  }
-
-  return nights;
-}
-
-function calculateDormAmount({ headcount, startDate, endDate }) {
-  const count = Number(headcount || 0);
-  const nights = getDormNights(startDate, endDate);
-
-  const baseAmount = 150000;
-  const extraPeople = Math.max(0, count - 8);
-  const nightlyAmount = baseAmount + extraPeople * 20000;
-  const totalAmount = nightlyAmount * nights;
-
-  return {
-    nights,
-    nightlyAmount,
-    totalAmount
-  };
-}
