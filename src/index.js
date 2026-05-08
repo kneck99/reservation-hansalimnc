@@ -631,3 +631,31 @@ export default {
     return json({ ok: false, error: "Not found" }, 404);
   }
 };
+function getDormNights(startDate, endDate) {
+  const start = new Date(`${startDate}T00:00:00+09:00`);
+  const end = new Date(`${endDate}T00:00:00+09:00`);
+  const diffMs = end.getTime() - start.getTime();
+  const nights = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+  if (!Number.isFinite(nights) || nights < 1) {
+    return 1;
+  }
+
+  return nights;
+}
+
+function calculateDormAmount({ headcount, startDate, endDate }) {
+  const count = Number(headcount || 0);
+  const nights = getDormNights(startDate, endDate);
+
+  const baseAmount = 150000;
+  const extraPeople = Math.max(0, count - 8);
+  const nightlyAmount = baseAmount + extraPeople * 20000;
+  const totalAmount = nightlyAmount * nights;
+
+  return {
+    nights,
+    nightlyAmount,
+    totalAmount
+  };
+}
