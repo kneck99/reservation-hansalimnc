@@ -57,6 +57,12 @@ function calculateDormAmount({ headcount, startDate, endDate }) {
   };
 }
 
+function buildPaymentId(prefix = "HS") {
+  const stamp = Date.now();
+  const rand = Math.floor(Math.random() * 10000).toString().padStart(4, "0");
+  return `${prefix}-${stamp}-${rand}`;
+}
+
 async function getPortOnePayment(env, paymentId) {
   const res = await fetch(`https://api.portone.io/payments/${encodeURIComponent(paymentId)}`, {
     method: "GET",
@@ -691,4 +697,3 @@ const expectedTotal = expectedAmount.totalAmount;
     return json({ ok: false, error: "Not found" }, 404);
   }
 };
-
