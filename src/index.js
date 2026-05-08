@@ -463,26 +463,45 @@ export default {
     }
     
     // 1) 연수원 예상 결제금액 자동 계산
-    if (url.pathname === "/api/quote" && request.method === "POST") {
-      try {
-        const body = await request.json();
-        const bookingType = body.bookingType || "dorm";
-        const totalAmount = bookingType === "dorm"
-          ? calculateDormPrice(body.headcount)
-          : 0;
+if (url.pathname === "/api/quote" && request.method === "POST") {
+  try {
+    const body = await request.json();
+    const bookingType = body.bookingType || "dorm";
 
-        return json({
-          ok: true,
-          bookingType,
-          totalAmount
-        });
-      } catch (error) {
-        return json({
-          ok: false,
-          error: error.message || "금액 계산 실패"
-        }, 400);
-      }
+    if (bookingType !== "dorm") {
+      return json({
+        ok: true,
+        bookingType,
+        nights: 0,
+        nightlyAmount: 0,
+        totalAmount: 0
+      });
     }
+
+    const amount = calculateDormAmount({
+      headcount: body.headcount,
+      startDate: body.startDate,
+      endDate: body.endDate
+    });
+
+    return json({
+      ok: true,
+      bookingType,
+      resourceName: body.resourceName || "연수원",
+      headcount: Number(body.headcount || 0),
+      startDate: body.startDate || "",
+      endDate: body.endDate || "",
+      nights: amount.nights,
+      nightlyAmount: amount.nightlyAmount,
+      totalAmount: amount.totalAmount
+    });
+  } catch (error) {
+    return json({
+      ok: false,
+      error: error.message || "금액 계산 실패"
+    }, 400);
+  }
+}
 
     // 2) 예약/결제 사전 생성
     if (url.pathname === "/api/create-payment" && request.method === "POST") {
@@ -506,26 +525,38 @@ export default {
           throw new Error("이용 목적을 입력해 주세요.");
         }
 
-        const totalAmount = bookingType === "dorm"
-          ? calculateDormPrice(body.headcount)
-          : 0;
+const amount = bookingType === "dorm"
+  ? calculateDormAmount({
+      headcount: body.headcount,
+      startDate: body.startDate,
+      endDate: body.endDate
+    })
+  : {
+      nights: 0,
+      nightlyAmount: 0,
+      totalAmount: 0
+    };
+
+const totalAmount = amount.totalAmount;
 
         const paymentId = buildPaymentId(bookingType === "dorm" ? "DORM" : "MEETING");
 
-        const reservation = {
-          bookingType,
-          resourceName: body.resourceName || (bookingType === "dorm" ? "연수원" : ""),
-          startDate: body.startDate,
-          endDate: body.endDate,
-          headcount: Number(body.headcount || 0),
-          contactName: body.contactName,
-          phone: body.phone,
-          email: body.email,
-          purpose: body.purpose,
-          settlementMethod: body.settlementMethod || "",
-          totalAmount
-        };
-
+const reservation = {
+  bookingType,
+  resourceName: body.resourceName || (bookingType === "dorm" ? "연수원" : ""),
+  startDate: body.startDate,
+  endDate: body.endDate,
+  headcount: Number(body.headcount || 0),
+  contactName: body.contactName,
+  phone: body.phone,
+  email: body.email,
+  purpose: body.purpose,
+  settlementMethod: body.settlementMethod || "",
+  nights: amount.nights,
+  nightlyAmount: amount.nightlyAmount,
+  totalAmount
+};
+        
         return json({
           ok: true,
           paymentId,
@@ -584,7 +615,13 @@ export default {
           paymentData.totalAmount ??
           0;
 
-        const expectedTotal = calculateDormPrice(order.headcount);
+const expectedAmount = calculateDormAmount({
+  headcount: order.headcount,
+  startDate: order.startDate,
+  endDate: order.endDate
+});
+
+const expectedTotal = expectedAmount.totalAmount;
 
         if (status !== "PAID") {
           throw new Error(`결제 상태가 PAID가 아닙니다: ${status}`);
