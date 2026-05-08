@@ -219,9 +219,9 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    if (request.method === "OPTIONS") {
-      return new Response(null, { status: 204, headers: corsHeaders() });
-    }
+if (request.method === "OPTIONS") {
+  return new Response(null, { status: 204, headers: corsHeaders(request) });
+}
    
     // 회원가입
     if (url.pathname === "/api/auth/signup" && request.method === "POST") {
