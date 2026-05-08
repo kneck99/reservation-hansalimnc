@@ -218,10 +218,11 @@ async function createSession(env, userId) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    const respond = (data, status = 200) => json(data, status, request);
 
-if (request.method === "OPTIONS") {
-  return new Response(null, { status: 204, headers: corsHeaders(request) });
-}
+    if (request.method === "OPTIONS") {
+      return new Response(null, { status: 204, headers: corsHeaders(request) });
+    }
    
     // 회원가입
     if (url.pathname === "/api/auth/signup" && request.method === "POST") {
@@ -257,12 +258,12 @@ if (request.method === "OPTIONS") {
           ) VALUES (?, ?, ?, ?, ?, 'user', 'pending', ?)
         `).bind(loginId, passwordHash, name, phone, affiliation, now).run();
 
-        return json({
-          ok: true,
-          message: "회원가입 신청이 완료되었습니다. 관리자 승인 후 로그인할 수 있습니다."
-        });
+        return respond({
+  ok: true,
+  message: "회원가입 신청이 완료되었습니다. 관리자 승인 후 로그인할 수 있습니다."
+});
       } catch (error) {
-        return json({ ok: false, error: error.message || "회원가입 실패" }, 400);
+        return respond({ ok: false, error: error.message || "회원가입 실패" }, 400);
       }
     }
 
