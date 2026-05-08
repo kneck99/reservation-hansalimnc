@@ -18,12 +18,12 @@ function corsHeaders(request) {
   };
 }
 
-function json(data, status = 200) {
+function json(data, status = 200, request = null) {
   return new Response(JSON.stringify(data), {
     status,
     headers: {
       "Content-Type": "application/json; charset=utf-8",
-      ...corsHeaders()
+      ...corsHeaders(request)
     }
   });
 }
