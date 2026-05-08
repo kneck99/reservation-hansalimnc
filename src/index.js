@@ -1,11 +1,20 @@
-const ALLOWED_ORIGIN = "https://reservation.hansalimnc.co.kr";
+const ALLOWED_ORIGINS = [
+  "https://reservation.hansalimnc.co.kr",
+  "https://kneck99.github.io"
+];
 
-function corsHeaders() {
+function corsHeaders(request) {
+  const origin = request?.headers?.get("Origin") || "";
+  const allowOrigin = ALLOWED_ORIGINS.includes(origin)
+    ? origin
+    : "https://reservation.hansalimnc.co.kr";
+
   return {
-    "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
+    "Access-Control-Allow-Origin": allowOrigin,
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    "Access-Control-Max-Age": "86400"
+    "Access-Control-Max-Age": "86400",
+    "Vary": "Origin"
   };
 }
 
