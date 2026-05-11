@@ -707,3 +707,43 @@ const expectedTotal = expectedAmount.totalAmount;
     return json({ ok: false, error: "Not found" }, 404);
   }
 };
+
+if (url.pathname === "/api/lookup-reservation" && request.method === "POST") {
+  try {
+    const body = await request.json();
+
+    if (!env.APPS_SCRIPT_URL) {
+      throw new Error("APPS_SCRIPT_URL 환경변수가 없습니다.");
+    }
+
+    const upstream = await fetch(env.APPS_SCRIPT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "lookupReservation",
+        reservationNo: body.reservationNo,
+        contactName: body.contactName,
+        phone: body.phone
+      })
+    });
+
+    const text = await upstream.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { raw: text };
+    }
+
+    if (!upstream.ok || data.ok === false) {
+      throw new Error(data.error || "예약조회 처리 실패");
+    }
+
+    return respond({
+      ok: true,
+      reservation: data.reservation || data
+    });
+  } catch (error) {
+    return respond({ ok: false, error: error.message || "예약조회 실패" }, 400);
+  }
+}
