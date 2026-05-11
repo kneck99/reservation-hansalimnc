@@ -708,58 +708,58 @@ const expectedTotal = expectedAmount.totalAmount;
   }
 };
 
-if (url.pathname === "/api/lookup-reservation" && request.method === "POST") {
-  try {
-    const body = await request.json();
+    if (url.pathname === "/api/lookup-reservation" && request.method === "POST") {
+      try {
+        const body = await request.json();
 
-    if (!env.APPS_SCRIPT_URL) {
-      throw new Error("APPS_SCRIPT_URL 환경변수가 없습니다.");
+        if (!env.APPS_SCRIPT_URL) {
+          throw new Error("APPS_SCRIPT_URL 환경변수가 없습니다.");
+        }
+
+        const reservationNo = String(body.reservationNo || '').trim();
+        const contactName = String(body.contactName || '').trim();
+        const phone = String(body.phone || '').trim();
+
+        if (!reservationNo) throw new Error("예약번호를 입력해 주세요.");
+        if (!contactName) throw new Error("담당자명을 입력해 주세요.");
+        if (!phone) throw new Error("연락처를 입력해 주세요.");
+
+        const upstream = await fetch(env.APPS_SCRIPT_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "lookupReservation",
+            reservationNo,
+            contactName,
+            phone
+          })
+        });
+
+        const text = await upstream.text();
+
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch {
+          throw new Error("Apps Script 응답을 JSON으로 해석할 수 없습니다.");
+        }
+
+        if (!upstream.ok) {
+          throw new Error(data.error || "예약조회 처리 중 오류가 발생했습니다.");
+        }
+
+        if (data.ok === false) {
+          throw new Error(data.error || "예약을 찾을 수 없습니다.");
+        }
+
+        return respond({
+          ok: true,
+          reservation: data.reservation || data
+        });
+      } catch (error) {
+        return respond({
+          ok: false,
+          error: error.message || "예약조회 실패"
+        }, 400);
+      }
     }
-
-    const reservationNo = String(body.reservationNo || '').trim();
-    const contactName = String(body.contactName || '').trim();
-    const phone = String(body.phone || '').trim();
-
-    if (!reservationNo) throw new Error("예약번호를 입력해 주세요.");
-    if (!contactName) throw new Error("담당자명을 입력해 주세요.");
-    if (!phone) throw new Error("연락처를 입력해 주세요.");
-
-    const upstream = await fetch(env.APPS_SCRIPT_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "lookupReservation",
-        reservationNo,
-        contactName,
-        phone
-      })
-    });
-
-    const text = await upstream.text();
-
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      throw new Error("Apps Script 응답을 JSON으로 해석할 수 없습니다.");
-    }
-
-    if (!upstream.ok) {
-      throw new Error(data.error || "예약조회 처리 중 오류가 발생했습니다.");
-    }
-
-    if (data.ok === false) {
-      throw new Error(data.error || "예약을 찾을 수 없습니다.");
-    }
-
-    return respond({
-      ok: true,
-      reservation: data.reservation || data
-    });
-  } catch (error) {
-    return respond({
-      ok: false,
-      error: error.message || "예약조회 실패"
-    }, 400);
-  }
-}
