@@ -260,6 +260,123 @@ export default {
           ) VALUES (?, ?, ?, ?, ?, 'user', 'pending', ?)
         `).bind(loginId, passwordHash, name, phone, affiliation, now).run();
 
+        if (url.pathname === "/api/my-reservations" && request.method === "GET") {
+  try {
+    const user = await requireAuth(request, env);
+
+    if (!env.APPS_SCRIPT_URL) {
+      throw new Error("APPS_SCRIPT_URL 환경변수가 없습니다.");
+    }
+
+    const upstream = await fetch(env.APPS_SCRIPT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "listReservationsByOwner",
+        loginId: user.login_id,
+        contactName: user.name,
+        phone: user.phone
+      })
+    });
+
+    const text = await upstream.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      throw new Error("Apps Script 응답을 JSON으로 해석할 수 없습니다.");
+    }
+
+    if (!upstream.ok || data.ok === false) {
+      throw new Error(data.error || "내 예약 조회 실패");
+    }
+
+    return respond({ ok: true, reservations: data.reservations || [] });
+  } catch (error) {
+    return respond({ ok: false, error: error.message || "내 예약 조회 실패" }, 400);
+  }
+}
+
+// 본인 예약 취소
+if (url.pathname === "/api/cancel-reservation" && request.method === "POST") {
+  try {
+    const user = await requireAuth(request, env);
+    const body = await request.json();
+
+    if (!env.APPS_SCRIPT_URL) {
+      throw new Error("APPS_SCRIPT_URL 환경변수가 없습니다.");
+    }
+
+    const upstream = await fetch(env.APPS_SCRIPT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "cancelReservationByOwner",
+        reservationNo: body.reservationNo,
+        contactName: user.name,
+        phone: user.phone,
+        hardDelete: true
+      })
+    });
+
+    const text = await upstream.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      throw new Error("Apps Script 응답을 JSON으로 해석할 수 없습니다.");
+    }
+
+    if (!upstream.ok || data.ok === false) {
+      throw new Error(data.error || "예약 취소 실패");
+    }
+
+    return respond({ ok: true, result: data.result || data });
+  } catch (error) {
+    return respond({ ok: false, error: error.message || "예약 취소 실패" }, 400);
+  }
+}
+
+// 본인 예약 변경
+if (url.pathname === "/api/update-reservation" && request.method === "POST") {
+  try {
+    const user = await requireAuth(request, env);
+    const body = await request.json();
+
+    if (!env.APPS_SCRIPT_URL) {
+      throw new Error("APPS_SCRIPT_URL 환경변수가 없습니다.");
+    }
+
+    const upstream = await fetch(env.APPS_SCRIPT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "updateReservationByOwner",
+        reservationNo: body.reservationNo,
+        contactName: user.name,
+        phone: user.phone,
+        updates: body.updates || {}
+      })
+    });
+
+    const text = await upstream.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      throw new Error("Apps Script 응답을 JSON으로 해석할 수 없습니다.");
+    }
+
+    if (!upstream.ok || data.ok === false) {
+      throw new Error(data.error || "예약 변경 실패");
+    }
+
+    return respond({ ok: true, reservation: data.reservation || data });
+  } catch (error) {
+    return respond({ ok: false, error: error.message || "예약 변경 실패" }, 400);
+  }
+}
+        
         return respond({
           ok: true,
           message: "회원가입 신청이 완료되었습니다. 관리자 승인 후 로그인할 수 있습니다."
