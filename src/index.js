@@ -109,28 +109,28 @@ function addDays(days) {
 }
 
 function normalizeLoginId(value) {
-  return String(value || '').trim().toLowerCase();
+  return String(value || "").trim().toLowerCase();
 }
 
 function clean(value) {
-  return String(value || '').trim();
+  return String(value || "").trim();
 }
 
 function normalizePhone(value) {
-  const digits = String(value || '').replace(/\D/g, '').slice(0, 11);
+  const digits = String(value || "").replace(/\D/g, "").slice(0, 11);
   if (digits.length < 4) return digits;
   if (digits.length < 8) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
   return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
 }
 
 async function sha256Hex(input) {
-  const hashBuffer = await crypto.subtle.digest('SHA-256', textEncoder.encode(input));
-  return [...new Uint8Array(hashBuffer)].map(b => b.toString(16).padStart(2, '0')).join('');
+  const hashBuffer = await crypto.subtle.digest("SHA-256", textEncoder.encode(input));
+  return [...new Uint8Array(hashBuffer)].map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
 async function hashPassword(loginId, password, env) {
   const normalizedId = normalizeLoginId(loginId);
-  const raw = `${env.SESSION_SECRET}::${normalizedId}::${String(password || '')}`;
+  const raw = `${env.SESSION_SECRET}::${normalizedId}::${String(password || "")}`;
   return await sha256Hex(raw);
 }
 
@@ -139,13 +139,14 @@ function makeSessionToken() {
 }
 
 function getBearerToken(request) {
-  const auth = request.headers.get('Authorization') || '';
+  const auth = request.headers.get("Authorization") || "";
   const match = auth.match(/^Bearer\s+(.+)$/i);
-  return match ? match[1].trim() : '';
+  return match ? match[1].trim() : "";
 }
 
 async function getSessionUser(env, token) {
   if (!token) return null;
+  if (!env.DB) return null;
 
   const row = await env.DB.prepare(`
     SELECT
@@ -179,11 +180,11 @@ async function requireAuth(request, env) {
   const user = await getSessionUser(env, token);
 
   if (!user) {
-    throw new Error('로그인이 필요합니다.');
+    throw new Error("로그인이 필요합니다.");
   }
 
-  if (user.status !== 'approved') {
-    throw new Error('승인된 계정만 사용할 수 있습니다.');
+  if (user.status !== "approved") {
+    throw new Error("승인된 계정만 사용할 수 있습니다.");
   }
 
   return user;
@@ -192,8 +193,8 @@ async function requireAuth(request, env) {
 async function requireAdmin(request, env) {
   const user = await requireAuth(request, env);
 
-  if (user.role !== 'admin') {
-    throw new Error('관리자 권한이 필요합니다.');
+  if (user.role !== "admin") {
+    throw new Error("관리자 권한이 필요합니다.");
   }
 
   return user;
@@ -223,14 +224,15 @@ export default {
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: corsHeaders(request) });
     }
-   
+
     // 회원가입
     if (url.pathname === "/api/auth/signup" && request.method === "POST") {
       try {
-        const body = await request.json();
+        if (!env.DB) throw new Error("DB binding이 없습니다. Cloudflare D1 binding 이름을 확인해 주세요.");
 
+        const body = await request.json();
         const loginId = normalizeLoginId(body.loginId);
-        const password = String(body.password || '');
+        const password = String(body.password || "");
         const name = clean(body.name);
         const phone = normalizePhone(body.phone);
         const affiliation = clean(body.affiliation);
@@ -259,9 +261,9 @@ export default {
         `).bind(loginId, passwordHash, name, phone, affiliation, now).run();
 
         return respond({
-  ok: true,
-  message: "회원가입 신청이 완료되었습니다. 관리자 승인 후 로그인할 수 있습니다."
-});
+          ok: true,
+          message: "회원가입 신청이 완료되었습니다. 관리자 승인 후 로그인할 수 있습니다."
+        });
       } catch (error) {
         return respond({ ok: false, error: error.message || "회원가입 실패" }, 400);
       }
@@ -270,10 +272,11 @@ export default {
     // 로그인
     if (url.pathname === "/api/auth/login" && request.method === "POST") {
       try {
-        const body = await request.json();
+        if (!env.DB) throw new Error("DB binding이 없습니다. Cloudflare D1 binding 이름을 확인해 주세요.");
 
+        const body = await request.json();
         const loginId = normalizeLoginId(body.loginId);
-        const password = String(body.password || '');
+        const password = String(body.password || "");
 
         if (!loginId) throw new Error("아이디를 입력해 주세요.");
         if (!password) throw new Error("비밀번호를 입력해 주세요.");
@@ -291,7 +294,7 @@ export default {
           throw new Error("아이디 또는 비밀번호가 올바르지 않습니다.");
         }
 
-        if (user.status !== 'approved') {
+        if (user.status !== "approved") {
           throw new Error("아직 승인되지 않은 계정입니다.");
         }
 
@@ -301,7 +304,7 @@ export default {
           UPDATE users SET last_login_at = ? WHERE id = ?
         `).bind(isoNow(), user.id).run();
 
-        return json({
+        return respond({
           ok: true,
           token: session.token,
           expiresAt: session.expiresAt,
@@ -316,7 +319,7 @@ export default {
           }
         });
       } catch (error) {
-        return json({ ok: false, error: error.message || "로그인 실패" }, 400);
+        return respond({ ok: false, error: error.message || "로그인 실패" }, 400);
       }
     }
 
@@ -325,7 +328,7 @@ export default {
       try {
         const user = await requireAuth(request, env);
 
-        return json({
+        return respond({
           ok: true,
           user: {
             id: user.user_id,
@@ -338,32 +341,36 @@ export default {
           }
         });
       } catch (error) {
-        return json({ ok: false, error: error.message || "인증 확인 실패" }, 401);
+        return respond({ ok: false, error: error.message || "인증 확인 실패" }, 401);
       }
     }
 
     // 로그아웃
     if (url.pathname === "/api/auth/logout" && request.method === "POST") {
       try {
+        if (!env.DB) throw new Error("DB binding이 없습니다. Cloudflare D1 binding 이름을 확인해 주세요.");
+
         const token = getBearerToken(request);
         if (token) {
           await env.DB.prepare(`DELETE FROM sessions WHERE id = ?`).bind(token).run();
         }
 
-        return json({
+        return respond({
           ok: true,
           message: "로그아웃 되었습니다."
         });
       } catch (error) {
-        return json({ ok: false, error: error.message || "로그아웃 실패" }, 400);
+        return respond({ ok: false, error: error.message || "로그아웃 실패" }, 400);
       }
     }
 
     // 최초 관리자 지정
     if (url.pathname === "/api/admin/bootstrap" && request.method === "POST") {
       try {
+        if (!env.DB) throw new Error("DB binding이 없습니다. Cloudflare D1 binding 이름을 확인해 주세요.");
+
         const body = await request.json();
-        const initAdminKey = String(body.initAdminKey || '');
+        const initAdminKey = String(body.initAdminKey || "");
         const loginId = normalizeLoginId(body.loginId);
 
         if (!env.INIT_ADMIN_KEY) {
@@ -392,21 +399,22 @@ export default {
           WHERE login_id = ?
         `).bind(loginId).run();
 
-        return json({
+        return respond({
           ok: true,
           message: "초기 관리자 지정이 완료되었습니다."
         });
       } catch (error) {
-        return json({ ok: false, error: error.message || "초기 관리자 지정 실패" }, 400);
+        return respond({ ok: false, error: error.message || "초기 관리자 지정 실패" }, 400);
       }
     }
 
-    // 승인 대기 사용자 목록
+    // 사용자 목록
     if (url.pathname === "/api/admin/users" && request.method === "GET") {
       try {
-        await requireAdmin(request, env);
+        if (!env.DB) throw new Error("DB binding이 없습니다. Cloudflare D1 binding 이름을 확인해 주세요.");
 
-        const status = clean(url.searchParams.get('status') || 'pending');
+        await requireAdmin(request, env);
+        const status = clean(url.searchParams.get("status") || "pending");
 
         const result = await env.DB.prepare(`
           SELECT id, login_id, name, phone, affiliation, role, status, created_at
@@ -415,20 +423,21 @@ export default {
           ORDER BY id ASC
         `).bind(status).all();
 
-        return json({
+        return respond({
           ok: true,
           users: result.results || []
         });
       } catch (error) {
-        return json({ ok: false, error: error.message || "사용자 목록 조회 실패" }, 403);
+        return respond({ ok: false, error: error.message || "사용자 목록 조회 실패" }, 403);
       }
     }
 
     // 사용자 승인
     if (url.pathname === "/api/admin/users/approve" && request.method === "POST") {
       try {
-        await requireAdmin(request, env);
+        if (!env.DB) throw new Error("DB binding이 없습니다. Cloudflare D1 binding 이름을 확인해 주세요.");
 
+        await requireAdmin(request, env);
         const body = await request.json();
         const userId = Number(body.userId);
 
@@ -442,20 +451,21 @@ export default {
           WHERE id = ?
         `).bind(userId).run();
 
-        return json({
+        return respond({
           ok: true,
           message: "사용자 승인이 완료되었습니다."
         });
       } catch (error) {
-        return json({ ok: false, error: error.message || "사용자 승인 실패" }, 400);
+        return respond({ ok: false, error: error.message || "사용자 승인 실패" }, 400);
       }
     }
 
     // 사용자 반려
     if (url.pathname === "/api/admin/users/reject" && request.method === "POST") {
       try {
-        await requireAdmin(request, env);
+        if (!env.DB) throw new Error("DB binding이 없습니다. Cloudflare D1 binding 이름을 확인해 주세요.");
 
+        await requireAdmin(request, env);
         const body = await request.json();
         const userId = Number(body.userId);
 
@@ -469,111 +479,100 @@ export default {
           WHERE id = ?
         `).bind(userId).run();
 
-        return json({
+        return respond({
           ok: true,
           message: "사용자 반려가 완료되었습니다."
         });
       } catch (error) {
-        return json({ ok: false, error: error.message || "사용자 반려 실패" }, 400);
+        return respond({ ok: false, error: error.message || "사용자 반려 실패" }, 400);
       }
     }
-    
-    // 1) 연수원 예상 결제금액 자동 계산
-if (url.pathname === "/api/quote" && request.method === "POST") {
-  try {
-    const body = await request.json();
-    const bookingType = body.bookingType || "dorm";
 
-    if (bookingType !== "dorm") {
-      return json({
-        ok: true,
-        bookingType,
-        nights: 0,
-        nightlyAmount: 0,
-        totalAmount: 0
-      });
+    // 연수원 예상 결제금액 자동 계산
+    if (url.pathname === "/api/quote" && request.method === "POST") {
+      try {
+        const body = await request.json();
+        const bookingType = body.bookingType || "dorm";
+
+        if (bookingType !== "dorm") {
+          return respond({
+            ok: true,
+            bookingType,
+            nights: 0,
+            nightlyAmount: 0,
+            totalAmount: 0
+          });
+        }
+
+        const amount = calculateDormAmount({
+          headcount: body.headcount,
+          startDate: body.startDate,
+          endDate: body.endDate
+        });
+
+        return respond({
+          ok: true,
+          bookingType,
+          resourceName: body.resourceName || "연수원",
+          headcount: Number(body.headcount || 0),
+          startDate: body.startDate || "",
+          endDate: body.endDate || "",
+          nights: amount.nights,
+          nightlyAmount: amount.nightlyAmount,
+          totalAmount: amount.totalAmount
+        });
+      } catch (error) {
+        return respond({
+          ok: false,
+          error: error.message || "금액 계산 실패"
+        }, 400);
+      }
     }
 
-    const amount = calculateDormAmount({
-      headcount: body.headcount,
-      startDate: body.startDate,
-      endDate: body.endDate
-    });
-
-    return json({
-      ok: true,
-      bookingType,
-      resourceName: body.resourceName || "연수원",
-      headcount: Number(body.headcount || 0),
-      startDate: body.startDate || "",
-      endDate: body.endDate || "",
-      nights: amount.nights,
-      nightlyAmount: amount.nightlyAmount,
-      totalAmount: amount.totalAmount
-    });
-  } catch (error) {
-    return json({
-      ok: false,
-      error: error.message || "금액 계산 실패"
-    }, 400);
-  }
-}
-
-    // 2) 예약/결제 사전 생성
+    // 예약/결제 사전 생성
     if (url.pathname === "/api/create-payment" && request.method === "POST") {
       try {
         const body = await request.json();
         const bookingType = body.bookingType || "meeting";
 
-        if (!body.startDate || !body.endDate) {
-          throw new Error("날짜를 입력해 주세요.");
-        }
-        if (!body.contactName) {
-          throw new Error("담당자명을 입력해 주세요.");
-        }
-        if (!body.phone) {
-          throw new Error("연락처를 입력해 주세요.");
-        }
-        if (!body.email) {
-          throw new Error("이메일을 입력해 주세요.");
-        }
-        if (!body.purpose) {
-          throw new Error("이용 목적을 입력해 주세요.");
-        }
+        if (!body.startDate || !body.endDate) throw new Error("날짜를 입력해 주세요.");
+        if (!body.contactName) throw new Error("담당자명을 입력해 주세요.");
+        if (!body.phone) throw new Error("연락처를 입력해 주세요.");
+        if (!body.email) throw new Error("이메일을 입력해 주세요.");
+        if (!body.purpose) throw new Error("이용 목적을 입력해 주세요.");
 
-const amount = bookingType === "dorm"
-  ? calculateDormAmount({
-      headcount: body.headcount,
-      startDate: body.startDate,
-      endDate: body.endDate
-    })
-  : {
-      nights: 0,
-      nightlyAmount: 0,
-      totalAmount: 0
-    };
+        const amount = bookingType === "dorm"
+          ? calculateDormAmount({
+              headcount: body.headcount,
+              startDate: body.startDate,
+              endDate: body.endDate
+            })
+          : {
+              nights: 0,
+              nightlyAmount: 0,
+              totalAmount: 0
+            };
 
-const totalAmount = amount.totalAmount;
-
+        const totalAmount = amount.totalAmount;
         const paymentId = buildPaymentId(bookingType === "dorm" ? "DORM" : "MEETING");
 
-const reservation = {
-  bookingType,
-  resourceName: body.resourceName || (bookingType === "dorm" ? "연수원" : ""),
-  startDate: body.startDate,
-  endDate: body.endDate,
-  headcount: Number(body.headcount || 0),
-  contactName: body.contactName,
-  phone: body.phone,
-  email: body.email,
-  purpose: body.purpose,
-  settlementMethod: body.settlementMethod || "",
-  nights: amount.nights,
-  nightlyAmount: amount.nightlyAmount,
-  totalAmount
-};
-        
-        return json({
+        const reservation = {
+          bookingType,
+          resourceName: body.resourceName || (bookingType === "dorm" ? "연수원" : ""),
+          startDate: body.startDate,
+          endDate: body.endDate,
+          headcount: Number(body.headcount || 0),
+          contactName: body.contactName,
+          phone: body.phone,
+          email: body.email,
+          purpose: body.purpose,
+          settlementMethod: body.settlementMethod || "",
+          nights: amount.nights,
+          nightlyAmount: amount.nightlyAmount,
+          totalAmount
+        };
+
+        return respond({
           ok: true,
           paymentId,
           paymentRequired: bookingType === "dorm",
@@ -584,18 +583,18 @@ const reservation = {
           reservation
         });
       } catch (error) {
-        return json({
+        return respond({
           ok: false,
           error: error.message || "예약 데이터 생성 실패"
         }, 400);
       }
     }
 
-    // 3) 기존 mock 검증 (개발 중 임시 유지 가능)
+    // 기존 mock 검증 (개발 중 임시 유지 가능)
     if (url.pathname === "/api/verify-payment" && request.method === "POST") {
       try {
         const body = await request.json();
-        return json({
+        return respond({
           ok: true,
           verified: true,
           paymentId: body.paymentId,
@@ -604,14 +603,14 @@ const reservation = {
           mock: !!body.mock
         });
       } catch (error) {
-        return json({
+        return respond({
           ok: false,
           error: error.message || "결제 검증 실패"
         }, 400);
       }
     }
 
-    // 4) 실제 PortOne 서버 검증
+    // 실제 PortOne 서버 검증
     if (url.pathname === "/api/payment/complete" && request.method === "POST") {
       try {
         const body = await request.json();
@@ -631,13 +630,13 @@ const reservation = {
           paymentData.totalAmount ??
           0;
 
-const expectedAmount = calculateDormAmount({
-  headcount: order.headcount,
-  startDate: order.startDate,
-  endDate: order.endDate
-});
+        const expectedAmount = calculateDormAmount({
+          headcount: order.headcount,
+          startDate: order.startDate,
+          endDate: order.endDate
+        });
 
-const expectedTotal = expectedAmount.totalAmount;
+        const expectedTotal = expectedAmount.totalAmount;
 
         if (status !== "PAID") {
           throw new Error(`결제 상태가 PAID가 아닙니다: ${status}`);
@@ -647,7 +646,7 @@ const expectedTotal = expectedAmount.totalAmount;
           throw new Error(`결제 금액 불일치: ${paidTotal} / ${expectedTotal}`);
         }
 
-        return json({
+        return respond({
           ok: true,
           verified: true,
           paymentId,
@@ -655,14 +654,14 @@ const expectedTotal = expectedAmount.totalAmount;
           paidAmount: paidTotal
         });
       } catch (error) {
-        return json({
+        return respond({
           ok: false,
           error: error.message || "실결제 검증 실패"
         }, 400);
       }
     }
 
-    // 5) 예약 완료 처리
+    // 예약 완료 처리
     if (url.pathname === "/api/booking-complete" && request.method === "POST") {
       try {
         const body = await request.json();
@@ -690,24 +689,21 @@ const expectedTotal = expectedAmount.totalAmount;
           data = { raw: text };
         }
 
-        return json({
+        return respond({
           ok: true,
           reservationNo: data.reservationNo || data.booking?.reservationNo || "",
           reservation: data.reservation || body.reservation,
           appsScript: data
         });
       } catch (error) {
-        return json({
+        return respond({
           ok: false,
           error: error.message || "예약 완료 처리 실패"
         }, 500);
       }
     }
 
-    return json({ ok: false, error: "Not found" }, 404);
-  }
-};
-
+    // 예약 조회
     if (url.pathname === "/api/lookup-reservation" && request.method === "POST") {
       try {
         const body = await request.json();
@@ -716,9 +712,9 @@ const expectedTotal = expectedAmount.totalAmount;
           throw new Error("APPS_SCRIPT_URL 환경변수가 없습니다.");
         }
 
-        const reservationNo = String(body.reservationNo || '').trim();
-        const contactName = String(body.contactName || '').trim();
-        const phone = String(body.phone || '').trim();
+        const reservationNo = String(body.reservationNo || "").trim();
+        const contactName = String(body.contactName || "").trim();
+        const phone = String(body.phone || "").trim();
 
         if (!reservationNo) throw new Error("예약번호를 입력해 주세요.");
         if (!contactName) throw new Error("담당자명을 입력해 주세요.");
@@ -763,3 +759,7 @@ const expectedTotal = expectedAmount.totalAmount;
         }, 400);
       }
     }
+
+    return respond({ ok: false, error: "Not found" }, 404);
+  }
+};
