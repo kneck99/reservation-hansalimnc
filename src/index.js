@@ -877,6 +877,180 @@ if (url.pathname === "/api/update-reservation" && request.method === "POST") {
       }
     }
 
+      // 내 예약 목록
+    if (url.pathname === "/api/my-reservations" && request.method === "POST") {
+      try {
+        const user = await requireAuth(request, env);
+
+        if (!env.APPS_SCRIPT_URL) {
+          throw new Error("APPS_SCRIPT_URL 환경변수가 없습니다.");
+        }
+
+        const upstream = await fetch(env.APPS_SCRIPT_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "listReservationsByOwner",
+            contactName: user.name,
+            phone: user.phone
+          })
+        });
+
+        const text = await upstream.text();
+
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch {
+          throw new Error("Apps Script 응답을 JSON으로 해석할 수 없습니다.");
+        }
+
+        if (!upstream.ok) {
+          throw new Error(data.error || "내 예약 조회 처리 중 오류가 발생했습니다.");
+        }
+
+        if (data.ok === false) {
+          throw new Error(data.error || "내 예약을 불러오지 못했습니다.");
+        }
+
+        return respond({
+          ok: true,
+          reservations: data.reservations || data.items || []
+        });
+      } catch (error) {
+        return respond({
+          ok: false,
+          error: error.message || "내 예약 조회 실패"
+        }, 400);
+      }
+    }
+
+    // 예약 취소
+    if (url.pathname === "/api/cancel-reservation" && request.method === "POST") {
+      try {
+        const user = await requireAuth(request, env);
+
+        if (!env.APPS_SCRIPT_URL) {
+          throw new Error("APPS_SCRIPT_URL 환경변수가 없습니다.");
+        }
+
+        const body = await request.json();
+        const reservationNo = String(body.reservationNo || "").trim();
+
+        if (!reservationNo) {
+          throw new Error("reservationNo가 필요합니다.");
+        }
+
+        const upstream = await fetch(env.APPS_SCRIPT_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "cancelReservationByOwner",
+            reservationNo,
+            contactName: user.name,
+            phone: user.phone
+          })
+        });
+
+        const text = await upstream.text();
+
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch {
+          throw new Error("Apps Script 응답을 JSON으로 해석할 수 없습니다.");
+        }
+
+        if (!upstream.ok) {
+          throw new Error(data.error || "예약 취소 처리 중 오류가 발생했습니다.");
+        }
+
+        if (data.ok === false) {
+          throw new Error(data.error || "예약 취소에 실패했습니다.");
+        }
+
+        return respond({
+          ok: true,
+          deleted: !!data.deleted,
+          reservationNo: data.reservationNo || reservationNo,
+          warnings: data.warnings || []
+        });
+      } catch (error) {
+        return respond({
+          ok: false,
+          error: error.message || "예약 취소 실패"
+        }, 400);
+      }
+    }
+
+    // 예약 변경
+    if (url.pathname === "/api/update-reservation" && request.method === "POST") {
+      try {
+        const user = await requireAuth(request, env);
+
+        if (!env.APPS_SCRIPT_URL) {
+          throw new Error("APPS_SCRIPT_URL 환경변수가 없습니다.");
+        }
+
+        const body = await request.json();
+        const reservationNo = String(body.reservationNo || "").trim();
+        const updates = body.updates || {};
+
+        if (!reservationNo) {
+          throw new Error("reservationNo가 필요합니다.");
+        }
+
+        const allowedUpdates = {};
+        if ("purpose" in updates) allowedUpdates.purpose = String(updates.purpose || "").trim();
+        if ("email" in updates) allowedUpdates.email = String(updates.email || "").trim();
+        if ("contactName" in updates) allowedUpdates.contactName = String(updates.contactName || "").trim();
+        if ("phone" in updates) allowedUpdates.phone = String(updates.phone || "").trim();
+        if ("resourceName" in updates) allowedUpdates.resourceName = String(updates.resourceName || "").trim();
+        if ("startDateText" in updates) allowedUpdates.startDateText = String(updates.startDateText || "").trim();
+        if ("endDateText" in updates) allowedUpdates.endDateText = String(updates.endDateText || "").trim();
+        if ("headcount" in updates) allowedUpdates.headcount = Number(updates.headcount || 0);
+
+        const upstream = await fetch(env.APPS_SCRIPT_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "updateReservationByOwner",
+            reservationNo,
+            contactName: user.name,
+            phone: user.phone,
+            updates: allowedUpdates
+          })
+        });
+
+        const text = await upstream.text();
+
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch {
+          throw new Error("Apps Script 응답을 JSON으로 해석할 수 없습니다.");
+        }
+
+        if (!upstream.ok) {
+          throw new Error(data.error || "예약 변경 처리 중 오류가 발생했습니다.");
+        }
+
+        if (data.ok === false) {
+          throw new Error(data.error || "예약 변경에 실패했습니다.");
+        }
+
+        return respond({
+          ok: true,
+          reservation: data.reservation || data
+        });
+      } catch (error) {
+        return respond({
+          ok: false,
+          error: error.message || "예약 변경 실패"
+        }, 400);
+      }
+    }
+    
     return respond({ ok: false, error: "Not found" }, 404);
   }
 };
